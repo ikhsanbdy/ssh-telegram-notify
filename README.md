@@ -65,15 +65,18 @@ notification.
 
 ## 2. Install on the server
 
+On the server:
+
 ```bash
-scp -r ssh-telegram-notify user@server:/tmp/
-ssh user@server
-cd /tmp/ssh-telegram-notify
+sudo apt-get install -y git
+sudo git clone https://github.com/ikhsanbdy/ssh-telegram-notify.git /opt/ssh-telegram-notify
+cd /opt/ssh-telegram-notify
 sudo ./install.sh
 ```
 
-If SSH runs on a non-default port, use `-P <port>` for `scp` and `-p <port>`
-for `ssh`. The port makes no difference to the notifications.
+The clone is owned by root on purpose. `install.sh` is run from it with sudo,
+so only root should be able to change those files. The SSH port the server
+listens on makes no difference to the notifications.
 
 The installer will:
 - copy the script to `/usr/local/bin/ssh-telegram-notify.sh`
@@ -107,11 +110,24 @@ Edit `/etc/ssh-telegram-notify.conf`:
 | `IGNORE_IPS`    | Space-separated IPs that are not notified (exact) |
 | `IGNORE_USERS`  | Space-separated users that are not notified       |
 
+## Update
+
+```bash
+cd /opt/ssh-telegram-notify
+sudo git pull
+sudo ./install.sh
+```
+
+Your config is kept. The installer only touches `/etc/pam.d/sshd` if the PAM
+line needs to change, and it sends a test message at the end.
+
 ## Uninstall
 
 ```bash
+cd /opt/ssh-telegram-notify
 sudo ./install.sh --uninstall
 sudo rm /etc/ssh-telegram-notify.conf   # optional
+sudo rm -rf /opt/ssh-telegram-notify    # optional
 ```
 
 ## License
