@@ -5,13 +5,14 @@ SSH, including `scp`, `sftp`, `rsync`, and `ssh host command`.
 
 Example message:
 
-```
-🔐 SSH Login
-Server : web-01 (10.0.0.12)
-User   : root
-From IP: 203.0.113.9
-Time   : 2026-10-30 14:57:12 WIB
-```
+> 🔐 **SSH Login** · web-01
+>
+> 👤 **User:** `ubuntu`<br>
+> 🌐 **From:** `203.0.113.9`<br>
+> 🖥️ **Server IP:** `172.31.25.163`<br>
+> 🕒 **Time:** 30 Oct 2026, 15:19:44 WIB
+
+Values are shown as code, so you can tap them in Telegram to copy them.
 
 ## How it works
 
@@ -125,6 +126,8 @@ Edit `/etc/ssh-telegram-notify.conf`:
 |-----------------|---------------------------------------------------|
 | `BOT_TOKEN`     | Bot token                                         |
 | `CHAT_ID`       | Target chat, group, or channel                    |
+| `SERVER_NAME`   | Name in the message title (default: short hostname) |
+| `TIMEZONE`      | Timestamp time zone, e.g. `Asia/Jakarta` (default: server's) |
 | `IGNORE_IPS`    | Space-separated IPs that are not notified (exact) |
 | `IGNORE_USERS`  | Space-separated users that are not notified       |
 

@@ -8,6 +8,14 @@ BOT_TOKEN="123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # Target chat ID (user, group, or channel). Groups usually start with "-100".
 CHAT_ID="123456789"
 
+# Name shown in the message title. Default: the short hostname.
+SERVER_NAME=""
+
+# Time zone for the timestamp, e.g. "Asia/Jakarta" (WIB), "Asia/Makassar"
+# (WITA), "Asia/Jayapura" (WIT). Default: the server's time zone, which is
+# usually UTC on cloud servers.
+TIMEZONE=""
+
 # Space-separated lists; logins from these IPs/users are not notified.
 # Exact matches only (no CIDR ranges).
 IGNORE_IPS=""

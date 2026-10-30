@@ -42,12 +42,12 @@ fail() {
 [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || fail "BOT_TOKEN has an invalid format"
 
 if [ "$MODE" = test ]; then
-  TITLE="✅ SSH Notification Test"
+  TITLE="✅ <b>Test Notification</b>"
   PAM_USER="${SUDO_USER:-$(id -un)}"
-  PAM_RHOST="(manual test)"
+  PAM_RHOST="manual test"
 else
   [ "$PAM_TYPE" = "open_session" ] || exit 0
-  TITLE="🔐 SSH Login"
+  TITLE="🔐 <b>SSH Login</b>"
 
   # Skip IPs or users in the ignore lists (space-separated, no globbing).
   set -f
@@ -59,17 +59,37 @@ else
   done
 fi
 
+# Escape text for Telegram's HTML parse mode. Unescaped < or & would make
+# Telegram reject the whole message.
+html() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+# Source address of the default route: the server's main IP, even when
+# other interfaces (docker0, VPNs) exist. No packet is sent.
+server_ip() {
+  ip -4 route get 1.1.1.1 2>/dev/null |
+    awk '{ for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit } }'
+}
+
 # Prints the response body, a newline, then the HTTP status code.
-# hostname -f may hit DNS, so this must only run off the login path.
 send() {
-  local host server_ip msg
-  host="$(hostname -f 2>/dev/null || hostname)"
-  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  msg="${TITLE}
-Server : ${host}${server_ip:+ (${server_ip})}
-User   : ${PAM_USER:-?}
-From IP: ${PAM_RHOST:-?}
-Time   : $(date '+%Y-%m-%d %H:%M:%S %Z')"
+  local name ip now msg
+  name="${SERVER_NAME:-$(hostname -s 2>/dev/null || hostname)}"
+  ip="$(server_ip)"
+  # An empty TZ means UTC, so only set it for a time zone that exists.
+  if [ -n "$TIMEZONE" ] && [ -f "/usr/share/zoneinfo/$TIMEZONE" ]; then
+    now="$(TZ="$TIMEZONE" date '+%d %b %Y, %H:%M:%S %Z')"
+  else
+    now="$(date '+%d %b %Y, %H:%M:%S %Z')"
+  fi
+
+  msg="${TITLE} · $(html "$name")
+
+👤 <b>User:</b> <code>$(html "${PAM_USER:-?}")</code>
+🌐 <b>From:</b> <code>$(html "${PAM_RHOST:-?}")</code>${ip:+
+🖥️ <b>Server IP:</b> <code>$(html "$ip")</code>}
+🕒 <b>Time:</b> $(html "$now")"
 
   # The token is passed via stdin (curl -K -) so it doesn't show up in `ps`.
   # -q must come first: it stops curl from reading any .curlrc.
@@ -77,6 +97,7 @@ Time   : $(date '+%Y-%m-%d %H:%M:%S %Z')"
     curl -q -sS --max-time 10 -K - \
       --data-urlencode "chat_id=${CHAT_ID}" \
       --data-urlencode "text=${msg}" \
+      -d "parse_mode=HTML" \
       -d "disable_web_page_preview=true" \
       -w '\n%{http_code}' 2>/dev/null
 }
