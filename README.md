@@ -50,6 +50,24 @@ grep -n -e pam_exec -e pam_env /etc/pam.d/sshd
 ```
 
 The `pam_exec` line must have a lower line number than every `pam_env` line.
+The installer also warns if a `pam_env.so ... user_readenv=1` runs earlier,
+from the auth stack or from `/etc/pam.d/common-*`.
+
+### The bot token
+
+Anyone who gets root on the server can read the token. With it they can delete
+the messages the bot sent (Telegram allows this for 48 hours), including the
+alert about their own login, and send fake messages. So:
+
+- Use a bot dedicated to these alerts, not one that does anything else.
+- With many servers, use one bot per server (or per group of servers), so one
+  compromised server cannot tamper with the alerts of the others.
+- Telegram is an alerting channel, not an audit log. If you need records an
+  intruder cannot erase, also ship `auth.log` to a remote syslog server.
+
+Each message sends the hostname, server IP, username, and source IP to
+Telegram. Bot chats are not end-to-end encrypted. Check that this is
+acceptable for the servers you use it on.
 
 Limitation: the message cannot say which kind of access it was (shell, scp, or
 sftp), because the PAM session opens before the client asks for a shell or the
@@ -110,14 +128,25 @@ Edit `/etc/ssh-telegram-notify.conf`:
 | `IGNORE_IPS`    | Space-separated IPs that are not notified (exact) |
 | `IGNORE_USERS`  | Space-separated users that are not notified       |
 
+Keep the ignore lists short. A login to an ignored account, or from an ignored
+IP, is silent even when it is an attacker. If `UseDNS yes` is set in
+`sshd_config`, the remote address is a hostname, so `IGNORE_IPS` will not match.
+
 ## Update
+
+This code runs as root on every login, so review what changed before you
+install it:
 
 ```bash
 cd /opt/ssh-telegram-notify
-sudo git pull
+sudo git fetch
+sudo git log -p HEAD..@{u}        # read the incoming changes
+sudo git merge --ff-only @{u}
 sudo ./install.sh
 ```
 
+`git pull` alone does not change anything on the server. The login hook runs
+the copy in `/usr/local/bin`, so `install.sh` must be run after every update.
 Your config is kept. The installer only touches `/etc/pam.d/sshd` if the PAM
 line needs to change, and it sends a test message at the end.
 

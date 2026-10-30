@@ -13,30 +13,41 @@ SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 [ "$(id -u)" -eq 0 ] || { echo "Please run with sudo." >&2; exit 1; }
 
-# Print PAM_FILE without our entries, including the ones older versions
+# Print a PAM file without our entries, including the ones older versions
 # appended at the end of the file.
-pam_without_entry() {
+pam_strip() {
   sed -e '\|^# ssh-telegram-notify|d' \
       -e '\|^# Telegram notification on SSH login$|d' \
-      -e "\|pam_exec\.so .*${BIN}|d" "$PAM_FILE"
+      -e "\|pam_exec\.so .*${BIN}|d" "$1"
 }
 
-# Write new PAM_FILE content from stdin, with a backup, only if it changed.
-# `cat >` keeps the original owner and mode.
+# Replace PAM_FILE with stdin, only if it changed, keeping a backup.
+# A truncated /etc/pam.d/sshd would lock everyone out of SSH, so the new
+# content must differ from the old one only in our entries, and it is
+# moved into place atomically.
 pam_write() {
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "${PAM_FILE}.new.XXXXXX")"
   cat > "$tmp"
-  if ! cmp -s "$tmp" "$PAM_FILE"; then
-    cp -a "$PAM_FILE" "${PAM_FILE}.bak.$(date +%Y%m%d%H%M%S)"
-    cat "$tmp" > "$PAM_FILE"
-    echo "Updated $PAM_FILE (backup created)."
+  if cmp -s "$tmp" "$PAM_FILE"; then
+    rm -f "$tmp"
+    return 0
   fi
-  rm -f "$tmp"
+  if ! cmp -s <(pam_strip "$tmp") <(pam_strip "$PAM_FILE"); then
+    rm -f "$tmp"
+    echo "ERROR: refusing to write $PAM_FILE: unexpected changes outside our entry." >&2
+    return 1
+  fi
+  chown --reference="$PAM_FILE" "$tmp"
+  chmod --reference="$PAM_FILE" "$tmp"
+  sync "$tmp"
+  cp -a "$PAM_FILE" "${PAM_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+  mv -f "$tmp" "$PAM_FILE"
+  echo "Updated $PAM_FILE (backup created)."
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
-  pam_without_entry | pam_write
+  pam_strip "$PAM_FILE" | pam_write
   rm -f "$BIN"
   echo "PAM line and script removed. Config $CONF was kept (delete it manually if needed)."
   exit 0
@@ -62,16 +73,21 @@ chmod 600 "$CONF"
 
 # Insert our line right before the first pam_env.so session line, so users
 # cannot inject variables (LD_PRELOAD, BASH_ENV, PATH) via ~/.pam_environment.
-pam_without_entry |
+pam_strip "$PAM_FILE" |
   awk -v marker="$PAM_MARKER" -v line="$PAM_LINE" '
     !done && /^[[:space:]]*session[[:space:]].*pam_env\.so/ { print marker; print line; done = 1 }
     { print }
-    END { if (!done) { print ""; print marker; print line } }
+    END { if (!done) { print marker; print line } }
   ' | pam_write
 
-if grep -Eq '^[[:space:]]*auth[[:space:]].*pam_env\.so' "$PAM_FILE" /etc/pam.d/common-auth 2>/dev/null; then
-  echo "WARNING: pam_env.so is used in the auth stack; user variables may reach" >&2
-  echo "         the notify script. Review $PAM_FILE before relying on it." >&2
+# The ordering above only covers this file. A pam_env.so that reads user
+# files in the sshd auth stack, or in any common-* file (common-session is
+# included before our line), still runs before the notify script.
+if grep -Eqs '^[[:space:]]*auth[[:space:]].*pam_env\.so.*user_readenv=1' "$PAM_FILE" ||
+   grep -Eqs '^[^#]*pam_env\.so.*user_readenv=1' /etc/pam.d/common-*; then
+  echo "WARNING: pam_env.so with user_readenv=1 runs before the notify script" >&2
+  echo "         (sshd auth stack or /etc/pam.d/common-*). Users could inject" >&2
+  echo "         variables into it as root. Remove user_readenv=1 there first." >&2
 fi
 
 if ! sshd -T 2>/dev/null | grep -qi '^usepam yes'; then

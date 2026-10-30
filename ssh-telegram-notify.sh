@@ -37,6 +37,9 @@ fail() {
 # shellcheck source=/dev/null
 . "$CONFIG_FILE"
 [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ] || fail "BOT_TOKEN or CHAT_ID is empty"
+# The token goes into a curl config line below; reject anything that could
+# break out of its quotes and add curl options.
+[[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || fail "BOT_TOKEN has an invalid format"
 
 if [ "$MODE" = test ]; then
   TITLE="✅ SSH Notification Test"
@@ -46,7 +49,8 @@ else
   [ "$PAM_TYPE" = "open_session" ] || exit 0
   TITLE="🔐 SSH Login"
 
-  # Skip IPs or users in the ignore lists (space-separated).
+  # Skip IPs or users in the ignore lists (space-separated, no globbing).
+  set -f
   for ip in $IGNORE_IPS; do
     [ "$PAM_RHOST" = "$ip" ] && exit 0
   done
@@ -68,8 +72,9 @@ From IP: ${PAM_RHOST:-?}
 Time   : $(date '+%Y-%m-%d %H:%M:%S %Z')"
 
   # The token is passed via stdin (curl -K -) so it doesn't show up in `ps`.
+  # -q must come first: it stops curl from reading any .curlrc.
   printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$BOT_TOKEN" |
-    curl -sS --max-time 10 -K - \
+    curl -q -sS --max-time 10 -K - \
       --data-urlencode "chat_id=${CHAT_ID}" \
       --data-urlencode "text=${msg}" \
       -d "disable_web_page_preview=true" \

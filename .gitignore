@@ -1,0 +1,2 @@
+# Real configs hold the bot token; only the .example file belongs in git.
+*.conf
