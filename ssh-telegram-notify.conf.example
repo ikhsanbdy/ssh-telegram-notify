@@ -1,0 +1,14 @@
+# /etc/ssh-telegram-notify.conf  (owned by root, chmod 600)
+# This file is sourced as root; the script refuses it if it is not owned by
+# root or is writable by group/others.
+
+# Token from @BotFather
+BOT_TOKEN="123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Target chat ID (user, group, or channel). Groups usually start with "-100".
+CHAT_ID="123456789"
+
+# Space-separated lists; logins from these IPs/users are not notified.
+# Exact matches only (no CIDR ranges).
+IGNORE_IPS=""
+IGNORE_USERS=""
